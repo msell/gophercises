@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -10,67 +9,64 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"flag"
 )
 
 // https://github.com/gophercises/quiz
 func main() {
-	d := time.Now().Add(5 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), d)
-	defer cancel()
-	select {
-	case <-time.After(1 * time.Second):
-		fmt.Println("overslept")
-	case <-ctx.Done():
-		fmt.Println(ctx.Err())
-	}
-	ch := make(chan Result)
-	go startQuiz(ctx, ch)
-	r := <-ch
+	timeoutPtr := flag.Int("t", 30, "Quiz timeout seconds (default=30)")
+	flag.Parse()
 
-	fmt.Println("You got", r.NumberCorrect, "out of", r.NumberOfQuestions, "correct")
-}
-
-func startQuiz(ctx context.Context, ch chan Result) {
-	result := Result{}
 	file, err := os.Open("problems.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	r := csv.NewReader(bufio.NewReader(file))
+	numCorrect := 0
+	numTotal := 0
+	ch := make(chan bool)
 
-	for {
-		line, err := r.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			log.Fatal(err)
+	go func() {
+		for {
+			line, err := r.Read()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				log.Fatal(err)
+			}
+
+			numTotal++
+			question := line[0]
+			answer, err := strconv.Atoi(line[1])
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println(question)
+
+			var input string
+			fmt.Scanln(&input)
+
+			num, err := strconv.Atoi(input)
+			if err != nil {
+				fmt.Println("only numeric answers are accepted")
+			}
+
+			if num == answer {
+				numCorrect++
+			}
 		}
+		ch <- true
+	}()
 
-		result.NumberOfQuestions++
-		question := line[0]
-		answer, err := strconv.Atoi(line[1])
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(question)
+	timer := time.NewTimer(time.Duration(*timeoutPtr) * time.Second)
+	defer timer.Stop()
 
-		var input string
-		fmt.Scanln(&input)
-
-		num, err := strconv.Atoi(input)
-		if err != nil {
-			fmt.Println("only numeric answers are accepted")
-		}
-
-		if num == answer {
-			result.NumberCorrect++
-		}
+	select {
+	case <-ch:
+		fmt.Println("Answered all questions")
+	case <-timer.C:
+		fmt.Println("timeout")
 	}
-	ch <- result
-}
-
-// Result of quiz
-type Result struct {
-	NumberOfQuestions int
-	NumberCorrect     int
+	fmt.Println("You got", numCorrect, "out of", numTotal, "correct")
 }
