@@ -14,7 +14,7 @@ import (
 
 // https://github.com/gophercises/quiz
 func main() {
-	timeoutPtr := flag.Int("t", 30, "Quiz timeout seconds (default=30)")
+	timeoutPtr := flag.Int("t", 30, "Quiz timeout seconds")
 	flag.Parse()
 
 	file, err := os.Open("problems.csv")
@@ -69,4 +69,44 @@ func main() {
 		fmt.Println("timeout")
 	}
 	fmt.Println("You got", numCorrect, "out of", numTotal, "correct")
+}
+
+type problem struct {
+	question string;
+	answer int;
+}
+
+func getQuizData() (problems []problem, problemCount int) {
+	file, err := os.Open("problems.csv")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r := csv.NewReader(bufio.NewReader(file))
+
+	problems = make([]problem, 0)
+	for {
+		line, err := r.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			log.Fatal(err)
+		}
+
+		problemCount++
+		question := line[0]
+		answer, err := strconv.Atoi(line[1])
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		problem := problem{
+			question: question,
+			answer: answer}
+
+		problems = append(problems, problem)
+	}
+
+	fmt.Println(problems)
+	return problems, problemCount
 }
